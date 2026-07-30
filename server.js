@@ -22,7 +22,7 @@ let patientId = null;
 let lastLoginTime = 0;
 
 async function login() {
-  const res = await axios.post(`${API_BASE}/llu/auth/login`, {
+  const res = await axios.post(API_BASE + '/llu/auth/login', {
     email: LIBRE_EMAIL,
     password: LIBRE_PASSWORD
   }, { headers: HEADERS });
@@ -33,8 +33,8 @@ async function login() {
 
 async function getConnections() {
   if (!authToken) await login();
-  const res = await axios.get(`${API_BASE}/llu/connections`, {
-    headers: { ...HEADERS, 'Authorization': `Bearer ${authToken}` }
+  const res = await axios.get(API_BASE + '/llu/connections', {
+    headers: { ...HEADERS, Authorization: 'Bearer ' + authToken }
   });
   patientId = res.data.data[0].patientId;
   return patientId;
@@ -46,8 +46,8 @@ async function getReadings() {
     await login();
   }
   if (!patientId) await getConnections();
-  const res = await axios.get(`${API_BASE}/llu/connections/${patientId}/graph`, {
-    headers: { ...HEADERS, 'Authorization': `Bearer ${authToken}` }
+  const res = await axios.get(API_BASE + '/llu/connections/' + patientId + '/graph', {
+    headers: { ...HEADERS, Authorization: 'Bearer ' + authToken }
   });
   return res.data;
 }
@@ -58,9 +58,10 @@ app.use(express.static('public'));
 app.get('/api/glucose', async (req, res) => {
   try {
     const data = await getReadings();
-    res.json({ success: true, data });
+    res.json({ success: true, data: data });
   } catch (error) {
-    res.status(500.status(500).json({ success: false, error: error.message });
+    console.error('Error:', error.message);
+    res.status(500).json({ success: false, error: error.message });
   }
 });
 
@@ -69,5 +70,5 @@ app.get('/', (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+  console.log('Server running on port ' + PORT);
 });

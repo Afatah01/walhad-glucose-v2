@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Walhad Glucose Dashboard</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0f172a; color: #e2e8f0; min-height: 100vh; padding: 20px; }
+    .container { max-width: 500px; margin: 0 auto; }
+    .header { text-align: center; margin-bottom: 24px; }
+    .header h1 { font-size: 1.4rem; color: #38bdf8; margin-bottom: 4px; }
+    .header p { font-size: 0.85rem; color: #94a3b8; }
+    .card { background: #1e293b; border-radius: 16px; padding: 24px; margin-bottom: 16px; text-align: center; border: 1px solid #334155; }
+    .glucose-value { font-size: 4rem; font-weight: 700; line-height: 1; margin: 12px 0; }
+    .glucose-unit { font-size: 1.2rem; color: #94a3b8; }
+    .trend { font-size: 2.5rem; margin: 8px 0; }
+    .status { display: inline-block; padding: 6px 16px; border-radius: 20px; font-size: 0.9rem; font-weight: 600; margin-top: 8px; }
+    .status.normal { background: #166534; color: #86efac; }
+    .status.high { background: #7c2d12; color: #fdba74; }
+    .status.low { background: #1e3a8a; color: #93c5fd; }
+    .info-row { display: flex; justify-content: space-between; padding: 12px 0; border-bottom: 1px solid #334155; font-size: 0.9rem; }
+    .info-row:last-child { border-bottom: none; }
+    .label { color: #94a3b8; }
+    .value { font-weight: 600; }
+    .error { background: #450a0a; color: #fca5a5; padding: 16px; border-radius: 12px; text-align: center; font-size: 0.9rem; }
+    .loading { text-align: center; padding: 40px; color: #64748b; }
+    .spinner { width: 40px; height: 40px; border: 3px solid #334155; border-top-color: #38bdf8; border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 16px; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .history { margin-top: 8px; }
+    .history h3 { font-size: 1rem; margin-bottom: 12px; color: #cbd5e1; }
+    .history-item { display: flex; justify-content: space-between; padding: 8px 12px; background: #0f172a; border-radius: 8px; margin-bottom: 6px; font-size: 0.85rem; }
+    .history-item .time { color: #64748b; }
+    .history-item .reading { font-weight: 600; }
+    .refresh-btn { width: 100%; padding: 14px; background: #2563eb; color: white; border: none; border-radius: 12px; font-size: 1rem; font-weight: 600; cursor: pointer; margin-top: 8px; }
+    .refresh-btn:active { background: #1d4ed8; }
+    .footer { text-align: center; margin-top: 24px; font-size: 0.75rem; color: #475569; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>🩸 Walhad Glucose Monitor</h1>
+      <p>Real-time Libre2 readings</p>
+    </div>
+    <div id="main">
+      <div class="loading"><div class="spinner"></div><p>Loading glucose data...</p></div>
+    </div>
+    <button class="refresh-btn" onclick="fetchData()">🔄 Refresh Now</button>
+    <div class="footer">Auto-refreshes every 5 minutes<br>Dashboard v2.0 | EU Server</div>
+  </div>
+  <script>
+    const TREND_ARROWS = { 'None': '→', 'SingleUp': '↑', 'DoubleUp': '⇈', 'SingleDown': '↓', 'DoubleDown': '⇊', 'FortyFiveUp': '↗', 'FortyFiveDown': '↘' };
+    function getStatus(v) { if (v < 70) return { class: 'low', text: 'LOW' }; if (v > 180) return { class: 'high', text: 'HIGH' }; return { class: 'normal', text: 'NORMAL' }; }
+    function formatTime(iso) { if (!iso) return 'Unknown'; const d = new Date(iso); return d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', day: 'numeric', month: 'short' }); }
+    async function fetchData() {
+      const main = document.getElementById('main');
+      main.innerHTML = '<div class="loading"><div class="spinner"></div><p>Loading glucose data...</p></div>';
+      try {
+        const res = await fetch('/api/glucose');
+        const json = await res.json();
+        if (!json.success) { main.innerHTML = '<div class="error">❌ ' + json.error + '</div>'; return; }
+        const connection = json.data.data.connection;
+        const graphData = json.data.data.graphData || [];
+        const current = graphData[graphData.length - 1];
+        if (!current) { main.innerHTML = '<div class="error">No recent readings found</div>'; return; }
+        const value = current.Value || current.value || 0;
+        const trend = current.TrendArrow || current.trendArrow || 'None';
+        const time = current.Timestamp || current.timestamp || current.FactoryTimestamp;
+        const status = getStatus(value);
+        const arrow = TREND_ARROWS[trend] || '→';
+        let historyHTML = '';
+        const recent = graphData.slice(-6).reverse();
+        for (const r of recent) {
+          const v = r.Value || r.value || 0;
+          const t = r.Timestamp || r.timestamp || r.FactoryTimestamp;
+          historyHTML += '<div class="history-item"><span class="time">' + formatTime(t) + '</span><span class="reading" style="color:' + (v < 70 || v > 180 ? '#f87171' : '#86efac') + '">' + v + ' mg/dL</span></div>';
+        }
+        main.innerHTML = '<div class="card"><div class="glucose-value" style="color: ' + (status.class === 'normal' ? '#86efac' : status.class === 'high' ? '#fdba74' : '#93c5fd') + '">' + value + '</div><div class="glucose-unit">mg/dL</div><div class="trend">' + arrow + '</div><div class="status ' + status.class + '">' + status.text + '</div></div><div class="card"><div class="info-row"><span class="label">Last Reading</span><span class="value">' + formatTime(time) + '</span></div><div class="info-row"><span class="label">Patient</span><span class="value">' + (connection.firstName || '') + ' ' + (connection.lastName || '') + '</span></div></div><div class="card history"><h3>📊 Recent History</h3>' + historyHTML + '</div>';
+      } catch (err) { main.innerHTML = '<div class="error">❌ Network error: ' + err.message + '</div>'; }
+    }
+    fetchData();
+    setInterval(fetchData, 5 * 60 * 1000);
+  </script>
+</body>
+</html>
